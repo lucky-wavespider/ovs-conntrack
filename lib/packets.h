@@ -25,6 +25,7 @@
 #include "compiler.h"
 #include "geneve.h"
 #include "openvswitch/types.h"
+#include "odp-netlink.h"
 #include "random.h"
 #include "hash.h"
 #include "tun-metadata.h"
@@ -126,6 +127,8 @@ struct pkt_metadata {
     uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t pkt_mark;          /* Packet mark. */
     union flow_in_port in_port; /* Input port. */
+    uint16_t ct_state;          /* Connection state. */
+    uint16_t ct_zone;           /* Connection zone. */
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. Note that
                                  * if 'ip_dst' == 0, the rest of the fields may
                                  * be uninitialized. */
@@ -134,13 +137,18 @@ struct pkt_metadata {
 static inline void
 pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
 {
-    /* It can be expensive to zero out all of the tunnel metadata. However,
-     * we can just zero out ip_dst and the rest of the data will never be
-     * looked at. */
-    memset(md, 0, offsetof(struct pkt_metadata, tunnel));
-    md->tunnel.ip_dst = 0;
+    /* It can be expensive to zero out all metadata. Therefore:
+     *
+     * - We can just zero out 'tunnel.ip_dst' and the rest of the 'tunnel'
+     *   field will never be looked at.
+     * - We can just zero out 'ct_state' and the rest of the 'ct_*' members
+     *   will never be looked at. */
+    memset(md, 0, offsetof(struct pkt_metadata, in_port));
 
     md->in_port.odp_port = port;
+
+    md->ct_state = 0;
+    md->tunnel.ip_dst = 0;
 }
 
 bool dpid_from_string(const char *s, uint64_t *dpidp);
@@ -709,6 +717,19 @@ struct tcp_header {
     ovs_be16 tcp_urg;
 };
 BUILD_ASSERT_DECL(TCP_HEADER_LEN == sizeof(struct tcp_header));
+
+/* Connection states */
+#define CS_NEW               0x01
+#define CS_ESTABLISHED       0x02
+#define CS_RELATED           0x04
+#define CS_INVALID           0x20
+#define CS_REPLY_DIR         0x40
+#define CS_TRACKED           0x80
+
+/* Undefined connection state bits. */
+#define CS_SUPPORTED_MASK    (CS_NEW | CS_ESTABLISHED | CS_RELATED \
+                              | CS_INVALID | CS_REPLY_DIR | CS_TRACKED)
+#define CS_UNSUPPORTED_MASK  (~(uint32_t)CS_SUPPORTED_MASK)
 
 #define ARP_HRD_ETHERNET 1
 #define ARP_PRO_IP 0x0800

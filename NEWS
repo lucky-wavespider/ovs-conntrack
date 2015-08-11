@@ -24,6 +24,9 @@ Post-v2.4.0
    - ovs-ofctl syntax for the "reg_load" action now validates inputs to
      ensure they are of the format that the field accepts. Simply loading
      hexadecimal values into any field will no longer work.
+   - Add support for connection tracking through the new "ct" action
+     and "ct_state"/"ct_zone" match fields.  Only available on Linux kernels
+     with the connection tracking module loaded.
 
 
 v2.4.0 - 20 Aug 2015
