@@ -15,6 +15,8 @@
  */
 
 #include <config.h>
+#include <netinet/in.h>
+
 #include "ofp-actions.h"
 #include "bundle.h"
 #include "byte-order.h"
@@ -4696,7 +4698,9 @@ struct nx_action_conntrack {
     };
     uint8_t recirc_table;       /* Recirculate to a specific table, or
                                    NX_CT_RECIRC_NONE for no recirculation. */
-    uint8_t pad[5];             /* Zeroes */
+    uint8_t pad[3];             /* Zeroes */
+    ovs_be16 alg;               /* Well-known port number for the protocol.
+                                 * 0 indicates no ALG is required. */
     /* Followed by a sequence of ofpact elements, until the end of the action
      * is reached. */
 };
@@ -4746,6 +4750,7 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
         goto out;
     }
     conntrack->recirc_table = nac->recirc_table;
+    conntrack->alg = ntohs(nac->alg);
 
     ofpbuf_pull(out, sizeof(*conntrack));
 
@@ -4793,6 +4798,7 @@ encode_CT(const struct ofpact_conntrack *conntrack,
         nac->zone_imm = htons(conntrack->zone_imm);
     }
     nac->recirc_table = conntrack->recirc_table;
+    nac->alg = htons(conntrack->alg);
 
     len = ofpacts_put_openflow_actions(conntrack->actions,
                                        ofpact_ct_get_action_len(conntrack),
@@ -4837,6 +4843,8 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
                     return error;
                 }
             }
+        } else if (!strcmp(key, "alg")) {
+            error = str_to_connhelper(value, &oc->alg);
         } else if (!strcmp(key, "exec")) {
             /* Hide existing actions from ofpacts_parse_copy(), so the
              * nesting can be handled transparently. */
@@ -4857,6 +4865,16 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
     ofpact_update_len(ofpacts, &oc->ofpact);
     ofpbuf_push_uninit(ofpacts, ct_offset);
     return error;
+}
+
+static void
+format_alg(int port, struct ds *s)
+{
+    if (port == IPPORT_FTP) {
+        ds_put_format(s, "alg=ftp,");
+    } else if (port) {
+        ds_put_format(s, "alg=%d,", port);
+    }
 }
 
 static void
@@ -4881,6 +4899,7 @@ format_CT(const struct ofpact_conntrack *a, struct ds *s)
         ofpacts_format(a->actions, ofpact_ct_get_action_len(a), s);
         ds_put_format(s, "),");
     }
+    format_alg(a->alg, s);
     ds_chomp(s, ',');
     ds_put_char(s, ')');
 }
