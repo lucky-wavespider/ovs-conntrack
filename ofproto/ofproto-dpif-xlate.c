@@ -2807,6 +2807,7 @@ clear_conntrack(struct flow *flow)
 {
     flow->ct_state = 0;
     flow->ct_zone = 0;
+    flow->ct_mark = 0;
 }
 
 static void
@@ -4146,8 +4147,29 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     }
 
 static void
+put_ct_mark(const struct flow *flow, struct flow *base_flow,
+            struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+{
+    uint32_t base;
+    struct {
+        uint32_t key;
+        uint32_t mask;
+    } odp_attr;
+
+    base = base_flow->ct_mark;
+    odp_attr.key = flow->ct_mark;
+    odp_attr.mask = wc->masks.ct_mark;
+
+    if (odp_attr.mask && odp_attr.key != base) {
+        nl_msg_put_unspec(odp_actions, OVS_CT_ATTR_MARK, &odp_attr,
+                          sizeof(odp_attr));
+    }
+}
+
+static void
 compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 {
+    uint32_t old_ct_mark = ctx->base_flow.ct_mark;
     uint32_t flags = 0;
     size_t ct_offset;
     uint16_t zone;
@@ -4155,6 +4177,9 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     /* Ensure that any prior actions are applied before composing the new
      * conntrack action. */
     xlate_commit_actions(ctx);
+
+    /* Process nested actions first, to populate the key. */
+    do_xlate_actions(ofc->actions, ofpact_ct_get_action_len(ofc), ctx);
 
     if (ofc->flags & NX_CT_F_COMMIT) {
         flags |= OVS_CT_F_COMMIT;
@@ -4168,7 +4193,12 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     ct_offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CT);
     nl_msg_put_u32(ctx->odp_actions, OVS_CT_ATTR_FLAGS, flags);
     nl_msg_put_u16(ctx->odp_actions, OVS_CT_ATTR_ZONE, zone);
+    put_ct_mark(&ctx->xin->flow, &ctx->base_flow, ctx->odp_actions, ctx->wc);
     nl_msg_end_nested(ctx->odp_actions, ct_offset);
+
+    /* Restore the original ct fields in the key. These should only be exposed
+     * after recirculation to another table. */
+    ctx->base_flow.ct_mark = old_ct_mark;
 
     if (ofc->recirc_table == NX_CT_RECIRC_NONE) {
         /* If we do not recirculate as part of this action, hide the results of
