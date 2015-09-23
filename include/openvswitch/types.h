@@ -88,6 +88,13 @@ typedef union {
     } u64;
 } ovs_u128;
 
+typedef union {
+    ovs_be32 be32[4];
+    struct {
+        ovs_be64 hi, lo;
+    } be64;
+} ovs_be128;
+
 /* A 64-bit value, in network byte order, that is only aligned on a 32-bit
  * boundary. */
 typedef struct {
