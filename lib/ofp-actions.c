@@ -2476,51 +2476,58 @@ encode_SET_FIELD(const struct ofpact_set_field *sf,
     }
 }
 
-/* Parses a "set_field" action with argument 'arg', appending the parsed
- * action to 'ofpacts'.
+/* Parses the input argument 'arg' into the key, value, and delimiter
+ * components that are common across the reg_load and set_field action format.
+ *
+ * With an argument like "1->metadata", sets the following pointers to
+ * point within 'arg':
+ * key: "metadata"
+ * value: "1"
+ * delim: "->"
  *
  * Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
 static char * OVS_WARN_UNUSED_RESULT
-set_field_parse__(char *arg, struct ofpbuf *ofpacts,
-                  enum ofputil_protocol *usable_protocols)
+set_field_split_str(char *arg, char **key, char **value, char **delim)
 {
-    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-    char *value;
-    char *delim;
-    char *key;
-    const struct mf_field *mf;
-    char *error;
+    *value = arg;
+    *delim = strstr(arg, "->");
+    *key = *delim + strlen("->");
 
-    value = arg;
-    delim = strstr(arg, "->");
-    if (!delim) {
+    if (!*delim) {
         return xasprintf("%s: missing `->'", arg);
     }
-    if (strlen(delim) <= strlen("->")) {
+    if (strlen(*delim) <= strlen("->")) {
         return xasprintf("%s: missing field name following `->'", arg);
     }
 
-    key = delim + strlen("->");
-    mf = mf_from_name(key);
-    if (!mf) {
-        return xasprintf("%s is not a valid OXM field name", key);
-    }
+    return NULL;
+}
+
+/* Wraps mf_parse() to parse the input field 'mf' from the 'key' and 'value'
+ * strings, placing the output into 'dst' and (optionally) 'mask'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * OVS_WARN_UNUSED_RESULT
+set_field_parse__(const struct mf_field *mf, const char *key,
+                  const char *value, union mf_value *dst, union mf_value *mask)
+{
+    char *error;
+
     if (!mf->writable) {
         return xasprintf("%s is read-only", key);
     }
-    sf->field = mf;
-    delim[0] = '\0';
-    error = mf_parse(mf, value, &sf->value, &sf->mask);
+
+    error = mf_parse(mf, value, dst, mask);
     if (error) {
         return error;
     }
 
-    if (!mf_is_value_valid(mf, &sf->value)) {
+    if (!mf_is_value_valid(mf, dst)) {
         return xasprintf("%s is not a valid value for field %s", value, key);
     }
 
-    *usable_protocols &= mf->usable_protocols_exact;
     return NULL;
 }
 
@@ -2533,8 +2540,32 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_SET_FIELD(const char *arg, struct ofpbuf *ofpacts,
                 enum ofputil_protocol *usable_protocols)
 {
+    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
     char *copy = xstrdup(arg);
-    char *error = set_field_parse__(copy, ofpacts, usable_protocols);
+    char *key, *value, *delim;
+    const struct mf_field *mf;
+    char *error = NULL;
+
+    error = set_field_split_str(copy, &key, &value, &delim);
+    if (error) {
+        goto error;
+    }
+
+    mf = mf_from_name(key);
+    if (!mf) {
+        error = xasprintf("%s is not a valid OXM field name", key);
+        goto error;
+    }
+    delim[0] = '\0';
+
+    error = set_field_parse__(mf, key, value, &sf->value, &sf->mask);
+    if (error) {
+        goto error;
+    }
+    sf->field = mf;
+    *usable_protocols &= mf->usable_protocols_exact;
+
+error:
     free(copy);
     return error;
 }
