@@ -2571,34 +2571,61 @@ error:
 }
 
 static char * OVS_WARN_UNUSED_RESULT
-parse_reg_load(char *arg, struct ofpbuf *ofpacts)
+parse_reg_load__(char *arg, struct ofpbuf *ofpacts)
 {
     struct ofpact_set_field *sf = ofpact_put_reg_load(ofpacts);
-    const char *full_arg = arg;
-    uint64_t value = strtoull(arg, (char **) &arg, 0);
+    union mf_value immediate, mask;
+    const struct mf_field *mf;
+    char *key, *value, *delim;
     struct mf_subfield dst;
-    char *error;
+    char *error = NULL;
 
-    if (strncmp(arg, "->", 2)) {
-        return xasprintf("%s: missing `->' following value", full_arg);
-    }
-    arg += 2;
-    error = mf_parse_subfield(&dst, arg);
+    error = set_field_split_str(arg, &key, &value, &delim);
     if (error) {
         return error;
     }
 
-    if (dst.n_bits < 64 && (value >> dst.n_bits) != 0) {
-        return xasprintf("%s: value %"PRIu64" does not fit into %d bits",
-                         full_arg, value, dst.n_bits);
+    error = mf_parse_subfield(&dst, key);
+    if (error) {
+        return error;
+    }
+    delim[0] = '\0';
+    mf = dst.field;
+
+    error = set_field_parse__(mf, key, value, &immediate, &mask);
+    if (error) {
+        return error;
     }
 
-    sf->field = dst.field;
+    if (!bitwise_is_all_zeros(&immediate, mf->n_bytes, dst.n_bits,
+                              mf->n_bytes * 8 - dst.n_bits)) {
+        struct ds ds;
+
+        ds_init(&ds);
+        mf_format(mf, &immediate, &mask, &ds);
+        error = xasprintf("%s: value %s does not fit into %d bits",
+                          arg, ds_cstr(&ds), dst.n_bits);
+        ds_destroy(&ds);
+        return error;
+    }
+
+    sf->field = mf;
     memset(&sf->value, 0, sizeof sf->value);
-    bitwise_put(value, &sf->value, dst.field->n_bytes, dst.ofs, dst.n_bits);
-    bitwise_put(UINT64_MAX, &sf->mask,
-                dst.field->n_bytes, dst.ofs, dst.n_bits);
+    bitwise_copy(&immediate, mf->n_bytes, 0, &sf->value, mf->n_bytes,
+                 dst.ofs, dst.n_bits);
+    bitwise_copy(&mask, mf->n_bytes, 0, &sf->mask, mf->n_bytes,
+                 dst.ofs, dst.n_bits);
+
     return NULL;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_reg_load(char *arg, struct ofpbuf *ofpacts)
+{
+    char *copy = xstrdup(arg);
+    char *error = parse_reg_load__(copy, ofpacts);
+    free(copy);
+    return error;
 }
 
 static void

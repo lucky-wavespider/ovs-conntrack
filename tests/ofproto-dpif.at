@@ -1292,7 +1292,7 @@ cookie=0x7 table=5 in_port=84 actions=load:5->NXM_NX_REG4[[]],load:6->NXM_NX_TUN
 cookie=0x8 table=6 in_port=85 actions=mod_tp_src:85,controller,resubmit(86,7)
 cookie=0x9 table=7 in_port=86 actions=mod_tp_dst:86,controller,controller
 cookie=0xa dl_src=40:44:44:44:44:41 actions=mod_vlan_vid:99,mod_vlan_pcp:1,controller
-cookie=0xd dl_src=80:88:88:88:88:88 arp actions=load:2->OXM_OF_ARP_OP[[]],controller,load:0xc0a88001->OXM_OF_ARP_SPA[[]],controller,load:0x404444444441->OXM_OF_ARP_THA[[]],load:0x01010101->OXM_OF_ARP_SPA[[]],load:0x02020202->OXM_OF_ARP_TPA[[]],controller
+cookie=0xd dl_src=80:88:88:88:88:88 arp actions=load:2->OXM_OF_ARP_OP[[]],controller,load:192.168.128.1->OXM_OF_ARP_SPA[[]],controller,load:40:44:44:44:44:41->OXM_OF_ARP_THA[[]],load:1.1.1.1->OXM_OF_ARP_SPA[[]],load:2.2.2.2->OXM_OF_ARP_TPA[[]],controller
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
@@ -1564,7 +1564,7 @@ cookie=0xd dl_src=60:66:66:66:66:66 actions=pop_mpls:0x0800,controller
 cookie=0xc dl_src=70:77:77:77:77:77 actions=push_mpls:0x8848,load:1000->OXM_OF_MPLS_LABEL[[]],load:7->OXM_OF_MPLS_TC[[]],controller
 
 cookie=0xd dl_src=60:66:66:66:00:01 actions=pop_mpls:0x0800,dec_ttl,controller
-cookie=0xd dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:0xa000001->OXM_OF_IPV4_DST[[]],controller
+cookie=0xd dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:10.0.0.1->OXM_OF_IPV4_DST[[]],controller
 cookie=0xd dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:OXM_OF_IPV4_DST[[]]->OXM_OF_IPV4_SRC[[]],controller
 cookie=0xd dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:OXM_OF_IPV4_DST[[]],pop:OXM_OF_IPV4_SRC[[]],controller
 cookie=0xd dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,256,0,OXM_OF_IPV4_SRC[[0..7]]),controller
@@ -3020,7 +3020,7 @@ OVS_VSWITCHD_START
 ADD_OF_PORTS([br0], [1], [2])
 
 ovs-vsctl -- set Interface p2 type=dummy options:pcap=p2.pcap
-ovs-ofctl add-flow br0 'in_port=1,arp actions=load:2->OXM_OF_ARP_OP[[]],2,load:0xc0a88001->OXM_OF_ARP_SPA[[]],2,load:0x404444444441->OXM_OF_ARP_THA[[]],2'
+ovs-ofctl add-flow br0 'in_port=1,arp actions=load:2->OXM_OF_ARP_OP[[]],2,load:192.168.128.1->OXM_OF_ARP_SPA[[]],2,load:40:44:44:44:44:41->OXM_OF_ARP_THA[[]],2'
 
 # Input some packets that should follow the arp modification slow-path.
 for i in 1 2 3; do
