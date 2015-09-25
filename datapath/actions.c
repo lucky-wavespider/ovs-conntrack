@@ -692,7 +692,7 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 {
 	if (skb_network_offset(skb) > MAX_L2_LEN) {
 		OVS_NLERR(1, "L2 header too long to fragment");
-		return;
+		goto out;
 	}
 
 	if (ethertype == htons(ETH_P_IP)) {
@@ -716,8 +716,7 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 		struct rt6_info ovs_rt;
 
 		if (!v6ops) {
-			kfree_skb(skb);
-			return;
+			goto out;
 		}
 
 		prepare_frag(vport, skb);
@@ -736,8 +735,13 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 		WARN_ONCE(1, "Failed fragment ->%s: eth=%04x, MRU=%d, MTU=%d.",
 			  ovs_vport_name(vport), ntohs(ethertype), mru,
 			  vport->dev->mtu);
-		kfree_skb(skb);
+		goto out;
 	}
+
+	skb = NULL;
+out:
+	if (skb)
+		kfree_skb(skb);
 }
 #endif /* ENABLE_IPFRAG */
 
