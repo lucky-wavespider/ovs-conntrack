@@ -351,7 +351,7 @@ enum ovs_key_attr {
 	OVS_KEY_ATTR_CT_STATE,	/* u32 bitmask of OVS_CS_F_* */
 	OVS_KEY_ATTR_CT_ZONE,	/* u16 connection tracking zone. */
 	OVS_KEY_ATTR_CT_MARK,	/* u32 connection tracking mark */
-	OVS_KEY_ATTR_CT_LABEL,	/* 16-octet connection tracking label */
+	OVS_KEY_ATTR_CT_LABELS,	/* 16-octet connection tracking label */
 
 #ifdef __KERNEL__
 	/* Only used within kernel data path. */
@@ -671,7 +671,7 @@ struct ovs_action_push_tnl {
  * @OVS_CT_ATTR_MARK: u32 value followed by u32 mask. For each bit set in the
  * mask, the corresponding bit in the value is copied to the connection
  * tracking mark field in the connection.
- * @OVS_CT_ATTR_LABEL: %OVS_CT_LABEL_LEN value followed by %OVS_CT_LABEL_LEN
+ * @OVS_CT_ATTR_LABELS: %OVS_CT_LABEL_LEN value followed by %OVS_CT_LABEL_LEN
  * mask. For each bit set in the mask, the corresponding bit in the value is
  * copied to the connection tracking label field in the connection.
  * @OVS_CT_ATTR_HELPER: variable length string defining conntrack ALG.
@@ -681,7 +681,7 @@ enum ovs_ct_attr {
 	OVS_CT_ATTR_FLAGS,      /* u32 bitmask of OVS_CT_F_*. */
 	OVS_CT_ATTR_ZONE,       /* u16 zone id. */
 	OVS_CT_ATTR_MARK,       /* mark to associate with this connection. */
-	OVS_CT_ATTR_LABEL,      /* label to associate with this connection. */
+	OVS_CT_ATTR_LABELS,     /* label to associate with this connection. */
 	OVS_CT_ATTR_HELPER,     /* netlink helper to assist detection of
 				   related connections. */
 	__OVS_CT_ATTR_MAX

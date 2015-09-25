@@ -4184,7 +4184,7 @@ put_ct_label(const struct flow *flow, struct flow *base_flow,
             ovs_u128 mask;
         } *odp_ct_label;
 
-        odp_ct_label = nl_msg_put_unspec_uninit(odp_actions, OVS_CT_ATTR_LABEL,
+        odp_ct_label = nl_msg_put_unspec_uninit(odp_actions, OVS_CT_ATTR_LABELS,
                                                 sizeof(*odp_ct_label));
         odp_ct_label->key = *key;
         odp_ct_label->mask = *mask;
